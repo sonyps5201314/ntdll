@@ -3954,7 +3954,7 @@ typedef struct _REMOTE_PORT_VIEW {
     PortHandle - Points to a variable that will receive the
         port object handle if the call is successful.
 
-    ObjectAttributes - Points to a structure that specifies the object’s
+    ObjectAttributes - Points to a structure that specifies the objectÂ’s
         attributes. OBJ_KERNEL_HANDLE, OBJ_OPENLINK, OBJ_OPENIF, OBJ_EXCLUSIVE,
         OBJ_PERMANENT, and OBJ_INHERIT are not valid attributes for a port object.
 
@@ -4712,7 +4712,7 @@ typedef enum _SECTION_INFORMATION_CLASS
         SECTION_ALL_ACCESS  - All of the preceding +
                               STANDARD_RIGHTS_REQUIRED
 
-    ObjectAttributes - Points to a structure that specifies the object’s attributes.
+    ObjectAttributes - Points to a structure that specifies the objectÂ’s attributes.
         OBJ_OPENLINK is not a valid attribute for a section object.
 
     MaximumSize - Optionally points to a variable that specifies the size,
