@@ -3,9 +3,9 @@ Option Explicit
 Const adTypeBinary = 1
 Const adSaveCreateOverWrite = 2
 
-Function IIf( expr, truepart, falsepart )
-   IIf = falsepart
-   If expr Then IIf = truepart
+Function IIf(expr, truepart, falsepart)
+    IIf = falsepart
+    If expr Then IIf = truepart
 End Function
 
 'https://stackoverflow.com/questions/6405236/forcing-msxml-to-format-xml-output-with-indents-and-newlines
@@ -38,10 +38,8 @@ Private Sub FormatDocToFile(ByVal Doc, ByVal FileName)
                 Set .contentHandler = wtrFormatted
                 Set .dtdHandler = wtrFormatted
                 Set .errorHandler = wtrFormatted
-                .putProperty "http://xml.org/sax/properties/lexical-handler", _
-                             wtrFormatted
-                .putProperty "http://xml.org/sax/properties/declaration-handler", _
-                             wtrFormatted
+                .putProperty "http://xml.org/sax/properties/lexical-handler", wtrFormatted
+                .putProperty "http://xml.org/sax/properties/declaration-handler", wtrFormatted
                 .parse Doc
             End With
         End With
@@ -64,6 +62,35 @@ Function DirExists(Folder)
     Dim fs 'As FileSystemObject
     Set fs = CreateObject("Scripting.FileSystemObject")
     DirExists = fs.FolderExists(Folder)
+End Function
+
+'本脚本修改自https://www.sqlservercentral.com/articles/creating-folders-using-vb-and-recursion
+Function CreateDir(FolderName)
+    Dim fs 'As Scripting.FileSystemObject
+    Dim iBreak
+    On Error Resume Next
+    
+    'search from right to find path
+    iBreak = InStrRev(FolderName, "\")
+    If iBreak > 0 Then
+        Call CreateDir(Left(FolderName, iBreak - 1))
+    End If
+    
+    Set fs = CreateObject("Scripting.FileSystemObject")
+    If fs.FolderExists(FolderName) = False Then
+        CreateDir = VarIsNull(fs.CreateFolder(FolderName))
+    Else
+        CreateDir = True
+    End If
+End Function
+
+Function CreateDefaultUserProps(FileName, XmlText)
+    Dim fs 'As FileSystemObject
+    Set fs = CreateObject("Scripting.FileSystemObject")
+    Dim ts 'As TextStream
+    Set ts = fs.CreateTextFile(FileName)
+    ts.Write(XmlText)
+    ts.Close
 End Function
 
 Function Pos(SubStr, S)
@@ -235,14 +262,31 @@ Private Sub ModifyProps(FileName, includefolder, dlibfolder, slibfolder)
 End Sub
 
 Sub ModifyAllProps()
-  Dim objShell
-  Dim Path
-  Set objShell = CreateObject("WScript.Shell")
-  Path = objShell.Environment("Process").Item("LOCALAPPDATA") + "\Microsoft\MSBuild\v4.0\"
-  If (DirExists(Path)) Then
-    Call ModifyProps(Path + "Microsoft.Cpp.Win32.user.props", "{app}\include", vbNullString, vbNullString)
-    Call ModifyProps(Path + "Microsoft.Cpp.x64.user.props", "{app}\include", vbNullString, vbNullString)
-  End If
+    Dim objShell
+    Dim Path
+    Set objShell = CreateObject("WScript.Shell")
+    Path = objShell.Environment("Process").Item("LOCALAPPDATA") + "\Microsoft\MSBuild\v4.0\"
+    If Not DirExists(Path) Then
+        If CreateDir(Path) Then
+            Dim XmlText
+            XmlText = XmlText & "<?xml version=""1.0"" encoding=""utf-8""?> " & vbCrLf
+            XmlText = XmlText & "<Project DefaultTargets=""Build"" ToolsVersion=""12.0"" xmlns=""http://schemas.microsoft.com/developer/msbuild/2003"">" & vbCrLf
+            XmlText = XmlText & "  <ImportGroup Label=""PropertySheets"">" & vbCrLf
+            XmlText = XmlText & "  </ImportGroup>" & vbCrLf
+            XmlText = XmlText & "  <PropertyGroup Label=""UserMacros"" />" & vbCrLf
+            XmlText = XmlText & "  <PropertyGroup />" & vbCrLf
+            XmlText = XmlText & "  <ItemDefinitionGroup />" & vbCrLf
+            XmlText = XmlText & "  <ItemGroup />" & vbCrLf
+            XmlText = XmlText & "</Project>" & vbCrLf
+
+            Call CreateDefaultUserProps(Path + "Microsoft.Cpp.Win32.user.props", XmlText)
+            Call CreateDefaultUserProps(Path + "Microsoft.Cpp.x64.user.props", XmlText)
+        End If
+    End If
+    If (DirExists(Path)) Then
+        Call ModifyProps(Path + "Microsoft.Cpp.Win32.user.props", "{app}\include", vbNullString, vbNullString)
+        Call ModifyProps(Path + "Microsoft.Cpp.x64.user.props", "{app}\include", vbNullString, vbNullString)
+    End If
 End Sub
 
 ModifyAllProps
