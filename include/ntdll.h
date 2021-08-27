@@ -91,40 +91,84 @@ typedef enum _EVENT_TYPE
 
 } EVENT_TYPE;
 
-//
-// ANSI strings are counted 8-bit character strings. If they are
-// NULL terminated, Length does not include trailing NULL.
-//
+//https://github.com/processhacker/processhacker/blob/master/phnt/include/phnt_ntdef.h
+
+// Strings
 
 typedef struct _STRING
 {
-    USHORT Length;
-    USHORT MaximumLength;
-    PCHAR  Buffer;
+	USHORT Length;
+	USHORT MaximumLength;
+	PCHAR Buffer;
+} STRING, * PSTRING, ANSI_STRING, * PANSI_STRING, OEM_STRING, * POEM_STRING;
 
-} STRING, *PSTRING;
-
-//
-// Unicode strings are counted 16-bit character strings. If they are
-// NULL terminated, Length does not include trailing NULL.
-//
+typedef const STRING* PCSTRING;
+typedef const ANSI_STRING* PCANSI_STRING;
+typedef const OEM_STRING* PCOEM_STRING;
 
 typedef struct _UNICODE_STRING
 {
-    USHORT Length;
-    USHORT MaximumLength;
-    PWSTR  Buffer;
+	USHORT Length;
+	USHORT MaximumLength;
+	PWCH Buffer;
+} UNICODE_STRING, * PUNICODE_STRING;
 
-} UNICODE_STRING, *PUNICODE_STRING;
+typedef const UNICODE_STRING* PCUNICODE_STRING;
 
-typedef STRING ANSI_STRING;
-typedef PSTRING PANSI_STRING;
+#define RTL_CONSTANT_STRING(s) { sizeof(s) - sizeof((s)[0]), sizeof(s), s }
 
-typedef STRING OEM_STRING;
-typedef PSTRING POEM_STRING;
-typedef CONST STRING* PCOEM_STRING;
+// Balanced tree node
 
-typedef const UNICODE_STRING *PCUNICODE_STRING;
+#define RTL_BALANCED_NODE_RESERVED_PARENT_MASK 3
+
+typedef struct _RTL_BALANCED_NODE
+{
+	union
+	{
+		struct _RTL_BALANCED_NODE* Children[2];
+		struct
+		{
+			struct _RTL_BALANCED_NODE* Left;
+			struct _RTL_BALANCED_NODE* Right;
+		};
+	};
+	union
+	{
+		UCHAR Red : 1;
+		UCHAR Balance : 2;
+		ULONG_PTR ParentValue;
+	};
+} RTL_BALANCED_NODE, * PRTL_BALANCED_NODE;
+
+#define RTL_BALANCED_NODE_GET_PARENT_POINTER(Node) \
+    ((PRTL_BALANCED_NODE)((Node)->ParentValue & ~RTL_BALANCED_NODE_RESERVED_PARENT_MASK))
+
+// Portability
+
+typedef struct _SINGLE_LIST_ENTRY32
+{
+	ULONG Next;
+} SINGLE_LIST_ENTRY32, * PSINGLE_LIST_ENTRY32;
+
+typedef struct _STRING32
+{
+	USHORT Length;
+	USHORT MaximumLength;
+	ULONG Buffer;
+} STRING32, * PSTRING32;
+
+typedef STRING32 UNICODE_STRING32, * PUNICODE_STRING32;
+typedef STRING32 ANSI_STRING32, * PANSI_STRING32;
+
+typedef struct _STRING64
+{
+	USHORT Length;
+	USHORT MaximumLength;
+	ULONGLONG Buffer;
+} STRING64, * PSTRING64;
+
+typedef STRING64 UNICODE_STRING64, * PUNICODE_STRING64;
+typedef STRING64 ANSI_STRING64, * PANSI_STRING64;
 
 #define UNICODE_NULL ((WCHAR)0) // winnt
 
@@ -3365,31 +3409,205 @@ typedef struct _PEB_LDR_DATA
 } PEB_LDR_DATA, *PPEB_LDR_DATA; 
 
 
+//https://github.com/processhacker/processhacker/blob/master/phnt/include/ntldr.h
+// DLLs
+
+typedef BOOLEAN(NTAPI* PLDR_INIT_ROUTINE)(
+	_In_ PVOID DllHandle,
+	_In_ ULONG Reason,
+	_In_opt_ PVOID Context
+	);
+
+// symbols
+typedef struct _LDR_SERVICE_TAG_RECORD
+{
+	struct _LDR_SERVICE_TAG_RECORD* Next;
+	ULONG ServiceTag;
+} LDR_SERVICE_TAG_RECORD, * PLDR_SERVICE_TAG_RECORD;
+
+// symbols
+typedef struct _LDRP_CSLIST
+{
+	PSINGLE_LIST_ENTRY Tail;
+} LDRP_CSLIST, * PLDRP_CSLIST;
+
+// symbols
+typedef enum _LDR_DDAG_STATE
+{
+	LdrModulesMerged = -5,
+	LdrModulesInitError = -4,
+	LdrModulesSnapError = -3,
+	LdrModulesUnloaded = -2,
+	LdrModulesUnloading = -1,
+	LdrModulesPlaceHolder = 0,
+	LdrModulesMapping = 1,
+	LdrModulesMapped = 2,
+	LdrModulesWaitingForDependencies = 3,
+	LdrModulesSnapping = 4,
+	LdrModulesSnapped = 5,
+	LdrModulesCondensed = 6,
+	LdrModulesReadyToInit = 7,
+	LdrModulesInitializing = 8,
+	LdrModulesReadyToRun = 9
+} LDR_DDAG_STATE;
+
+// symbols
+typedef struct _LDR_DDAG_NODE
+{
+	LIST_ENTRY Modules;
+	PLDR_SERVICE_TAG_RECORD ServiceTagList;
+	ULONG LoadCount;
+	ULONG LoadWhileUnloadingCount;
+	ULONG LowestLink;
+	union
+	{
+		LDRP_CSLIST Dependencies;
+		SINGLE_LIST_ENTRY RemovalLink;
+	};
+	LDRP_CSLIST IncomingDependencies;
+	LDR_DDAG_STATE State;
+	SINGLE_LIST_ENTRY CondenseLink;
+	ULONG PreorderNumber;
+} LDR_DDAG_NODE, * PLDR_DDAG_NODE;
+
+// rev
+typedef struct _LDR_DEPENDENCY_RECORD
+{
+	SINGLE_LIST_ENTRY DependencyLink;
+	PLDR_DDAG_NODE DependencyNode;
+	SINGLE_LIST_ENTRY IncomingDependencyLink;
+	PLDR_DDAG_NODE IncomingDependencyNode;
+} LDR_DEPENDENCY_RECORD, * PLDR_DEPENDENCY_RECORD;
+
+// symbols
+typedef enum _LDR_DLL_LOAD_REASON
+{
+	LoadReasonStaticDependency,
+	LoadReasonStaticForwarderDependency,
+	LoadReasonDynamicForwarderDependency,
+	LoadReasonDelayloadDependency,
+	LoadReasonDynamicLoad,
+	LoadReasonAsImageLoad,
+	LoadReasonAsDataLoad,
+	LoadReasonEnclavePrimary, // REDSTONE3
+	LoadReasonEnclaveDependency,
+	LoadReasonUnknown = -1
+} LDR_DLL_LOAD_REASON, * PLDR_DLL_LOAD_REASON;
+
+#define LDRP_PACKAGED_BINARY 0x00000001
+#define LDRP_STATIC_LINK 0x00000002
+#define LDRP_IMAGE_DLL 0x00000004
+#define LDRP_LOAD_IN_PROGRESS 0x00001000
+#define LDRP_UNLOAD_IN_PROGRESS 0x00002000
+#define LDRP_ENTRY_PROCESSED 0x00004000
+#define LDRP_ENTRY_INSERTED 0x00008000
+#define LDRP_CURRENT_LOAD 0x00010000
+#define LDRP_FAILED_BUILTIN_LOAD 0x00020000
+#define LDRP_DONT_CALL_FOR_THREADS 0x00040000
+#define LDRP_PROCESS_ATTACH_CALLED 0x00080000
+#define LDRP_DEBUG_SYMBOLS_LOADED 0x00100000
+#define LDRP_IMAGE_NOT_AT_BASE 0x00200000 // Vista and below
+#define LDRP_COR_IMAGE 0x00400000
+#define LDRP_DONT_RELOCATE 0x00800000 // LDR_COR_OWNS_UNMAP
+#define LDRP_SYSTEM_MAPPED 0x01000000
+#define LDRP_IMAGE_VERIFYING 0x02000000
+#define LDRP_DRIVER_DEPENDENT_DLL 0x04000000
+#define LDRP_ENTRY_NATIVE 0x08000000
+#define LDRP_REDIRECTED 0x10000000
+#define LDRP_NON_PAGED_DEBUG_INFO 0x20000000
+#define LDRP_MM_LOADED 0x40000000
+#define LDRP_COMPAT_DATABASE_PROCESSED 0x80000000
+
+#define LDR_DATA_TABLE_ENTRY_SIZE_WINXP FIELD_OFFSET(LDR_DATA_TABLE_ENTRY, DdagNode)
+#define LDR_DATA_TABLE_ENTRY_SIZE_WIN7 FIELD_OFFSET(LDR_DATA_TABLE_ENTRY, BaseNameHashValue)
+#define LDR_DATA_TABLE_ENTRY_SIZE_WIN8 FIELD_OFFSET(LDR_DATA_TABLE_ENTRY, ImplicitPathOptions)
+#define LDR_DATA_TABLE_ENTRY_SIZE_WIN10 sizeof(LDR_DATA_TABLE_ENTRY)
+
+// symbols
 typedef struct _LDR_DATA_TABLE_ENTRY
 {
-    LIST_ENTRY InLoadOrderLinks;
-    LIST_ENTRY InMemoryOrderLinks;
-    LIST_ENTRY InInitializationOrderLinks;
-    PVOID DllBase;                             // Base address of the module
-    PVOID EntryPoint;
-    ULONG SizeOfImage;
-    UNICODE_STRING FullDllName;
-    UNICODE_STRING BaseDllName;
-    ULONG  Flags;
-    USHORT LoadCount;
-    USHORT TlsIndex;
-    LIST_ENTRY HashLinks;
-    PVOID SectionPointer;
-    ULONG CheckSum;
-    ULONG TimeDateStamp;
-    PVOID LoadedImports;
-    PVOID EntryPointActivationContext;
-    PVOID PatchInformation;
-    PVOID Unknown1;
-    PVOID Unknown2;
-    PVOID Unknown3;
+	LIST_ENTRY InLoadOrderLinks;
+	LIST_ENTRY InMemoryOrderLinks;
+	union
+	{
+		LIST_ENTRY InInitializationOrderLinks;
+		LIST_ENTRY InProgressLinks;
+	};
+	PVOID DllBase;
+	PLDR_INIT_ROUTINE EntryPoint;
+	ULONG SizeOfImage;
+	UNICODE_STRING FullDllName;
+	UNICODE_STRING BaseDllName;
+	union
+	{
+		UCHAR FlagGroup[4];
+		ULONG Flags;
+		struct
+		{
+			ULONG PackagedBinary : 1;
+			ULONG MarkedForRemoval : 1;
+			ULONG ImageDll : 1;
+			ULONG LoadNotificationsSent : 1;
+			ULONG TelemetryEntryProcessed : 1;
+			ULONG ProcessStaticImport : 1;
+			ULONG InLegacyLists : 1;
+			ULONG InIndexes : 1;
+			ULONG ShimDll : 1;
+			ULONG InExceptionTable : 1;
+			ULONG ReservedFlags1 : 2;
+			ULONG LoadInProgress : 1;
+			ULONG LoadConfigProcessed : 1;
+			ULONG EntryProcessed : 1;
+			ULONG ProtectDelayLoad : 1;
+			ULONG ReservedFlags3 : 2;
+			ULONG DontCallForThreads : 1;
+			ULONG ProcessAttachCalled : 1;
+			ULONG ProcessAttachFailed : 1;
+			ULONG CorDeferredValidate : 1;
+			ULONG CorImage : 1;
+			ULONG DontRelocate : 1;
+			ULONG CorILOnly : 1;
+			ULONG ChpeImage : 1;
+			ULONG ReservedFlags5 : 2;
+			ULONG Redirected : 1;
+			ULONG ReservedFlags6 : 2;
+			ULONG CompatDatabaseProcessed : 1;
+		};
+	};
+    union
+    {
+        USHORT LoadCount;
+        USHORT ObsoleteLoadCount;//since Win8
+    };
+	USHORT TlsIndex;
+	LIST_ENTRY HashLinks;
+	ULONG TimeDateStamp;
+	struct _ACTIVATION_CONTEXT* EntryPointActivationContext;
+	PVOID Lock; // RtlAcquireSRWLockExclusive
+	PLDR_DDAG_NODE DdagNode;
+	LIST_ENTRY NodeModuleLink;
+	struct _LDRP_LOAD_CONTEXT* LoadContext;
+	PVOID ParentDllBase;
+	PVOID SwitchBackContext;
+	RTL_BALANCED_NODE BaseAddressIndexNode;
+	RTL_BALANCED_NODE MappingInfoIndexNode;
+	ULONG_PTR OriginalBase;
+	LARGE_INTEGER LoadTime;
+	ULONG BaseNameHashValue;
+	LDR_DLL_LOAD_REASON LoadReason;
+	ULONG ImplicitPathOptions;
+	ULONG ReferenceCount;
+	ULONG DependentLoadFlags;
+	UCHAR SigningLevel; // since REDSTONE2
+} LDR_DATA_TABLE_ENTRY, * PLDR_DATA_TABLE_ENTRY;
 
-} LDR_DATA_TABLE_ENTRY, *PLDR_DATA_TABLE_ENTRY;
+#define LDR_IS_DATAFILE(DllHandle) (((ULONG_PTR)(DllHandle)) & (ULONG_PTR)1)
+#define LDR_IS_IMAGEMAPPING(DllHandle) (((ULONG_PTR)(DllHandle)) & (ULONG_PTR)2)
+#define LDR_MAPPEDVIEW_TO_DATAFILE(BaseAddress) ((PVOID)(((ULONG_PTR)(BaseAddress)) | (ULONG_PTR)1))
+#define LDR_MAPPEDVIEW_TO_IMAGEMAPPING(BaseAddress) ((PVOID)(((ULONG_PTR)(BaseAddress)) | (ULONG_PTR)2))
+#define LDR_DATAFILE_TO_MAPPEDVIEW(DllHandle) ((PVOID)(((ULONG_PTR)(DllHandle)) & ~(ULONG_PTR)1))
+#define LDR_IMAGEMAPPING_TO_MAPPEDVIEW(DllHandle) ((PVOID)(((ULONG_PTR)(DllHandle)) & ~(ULONG_PTR)2))
+#define LDR_IS_RESOURCE(DllHandle) (LDR_IS_IMAGEMAPPING(DllHandle) || LDR_IS_DATAFILE(DllHandle))
 
 // symbols
 typedef struct _PEB
