@@ -3413,9 +3413,9 @@ typedef struct _PEB_LDR_DATA
 // DLLs
 
 typedef BOOLEAN(NTAPI* PLDR_INIT_ROUTINE)(
-	_In_ PVOID DllHandle,
-	_In_ ULONG Reason,
-	_In_opt_ PVOID Context
+	IN PVOID DllHandle,
+    IN ULONG Reason,
+    IN PVOID Context OPTIONAL
 	);
 
 // symbols
