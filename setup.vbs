@@ -226,15 +226,12 @@ Private Sub ModifyProps(FileName, includefolder, dlibfolder, slibfolder)
           Set XMLNode = XMLDocument.createNode(1, "Link", "http://schemas.microsoft.com/developer/msbuild/2003")
           Set XMLParent = IdgNode.appendChild(XMLNode)
         End If
-        Dim s_value
-        s_value = "'$(PlatformToolset)' == 'v142' or '$(PlatformToolset)' == 'v141' or '$(PlatformToolset)' == 'v141_xp' or '$(PlatformToolset)' == 'v140' or '$(PlatformToolset)' == 'v140_xp'"
-        Set XMLNodes = XMLParent.selectNodes("//b:Link/b:AdditionalLibraryDirectories[@Condition=""" + s_value + """]")
+        Set XMLNodes = XMLParent.selectNodes("//b:Link/b:AdditionalLibraryDirectories[not(@Condition)]")
         If (XMLNodes.length > 0) Then
           Set DynamicLibraryDirectoriesNode = XMLNodes.Item(0)
         Else
           Set XMLNode = XMLDocument.createNode(1, "AdditionalLibraryDirectories", "http://schemas.microsoft.com/developer/msbuild/2003")
           Set DynamicLibraryDirectoriesNode = XMLParent.appendChild(XMLNode)
-          Call DynamicLibraryDirectoriesNode.setAttribute("Condition", s_value)
         End If
      End If
      If Len(slibfolder) > 0 Then
@@ -245,13 +242,12 @@ Private Sub ModifyProps(FileName, includefolder, dlibfolder, slibfolder)
           Set XMLNode = XMLDocument.createNode(1, "Lib", "http://schemas.microsoft.com/developer/msbuild/2003")
           Set XMLParent = IdgNode.appendChild(XMLNode)
         End If
-        Set XMLNodes = XMLParent.selectNodes("//b:Lib/b:AdditionalLibraryDirectories[@Condition=""" + s_value + """]")
+        Set XMLNodes = XMLParent.selectNodes("//b:Lib/b:AdditionalLibraryDirectories[not(@Condition)]")
         If (XMLNodes.length > 0) Then
           Set StaticLibraryDirectoriesNode = XMLNodes.Item(0)
         Else
           Set XMLNode = XMLDocument.createNode(1, "AdditionalLibraryDirectories", "http://schemas.microsoft.com/developer/msbuild/2003")
           Set StaticLibraryDirectoriesNode = XMLParent.appendChild(XMLNode)
-          Call StaticLibraryDirectoriesNode.setAttribute("Condition", s_value)
         End If
       End If
       
