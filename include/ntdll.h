@@ -3209,6 +3209,88 @@ typedef ULONG GDI_HANDLE_BUFFER[GDI_HANDLE_BUFFER_SIZE];
 
 typedef ULONG GDI_HANDLE_BUFFER32[GDI_HANDLE_BUFFER_SIZE32];
 typedef ULONG GDI_HANDLE_BUFFER64[GDI_HANDLE_BUFFER_SIZE64];
+//
+// Global flags that can be set to control system behavior.
+// Flag word is 32 bits.
+//
+
+#define FLG_STOP_ON_EXCEPTION           0x00000001      // user and kernel mode
+#define FLG_SHOW_LDR_SNAPS              0x00000002      // user and kernel mode
+#define FLG_DEBUG_INITIAL_COMMAND       0x00000004      // kernel mode only up until WINLOGON started
+#define FLG_STOP_ON_HUNG_GUI            0x00000008      // kernel mode only while running
+
+#define FLG_HEAP_ENABLE_TAIL_CHECK      0x00000010      // user mode only
+#define FLG_HEAP_ENABLE_FREE_CHECK      0x00000020      // user mode only
+#define FLG_HEAP_VALIDATE_PARAMETERS    0x00000040      // user mode only
+#define FLG_HEAP_VALIDATE_ALL           0x00000080      // user mode only
+
+#define FLG_APPLICATION_VERIFIER        0x00000100      // user mode only
+#define FLG_POOL_ENABLE_TAGGING         0x00000400      // kernel mode only
+#define FLG_HEAP_ENABLE_TAGGING         0x00000800      // user mode only
+
+#define FLG_USER_STACK_TRACE_DB         0x00001000      // x86 user mode only
+#define FLG_KERNEL_STACK_TRACE_DB       0x00002000      // x86 kernel mode only at boot time
+#define FLG_MAINTAIN_OBJECT_TYPELIST    0x00004000      // kernel mode only at boot time
+#define FLG_HEAP_ENABLE_TAG_BY_DLL      0x00008000      // user mode only
+
+#define FLG_DISABLE_STACK_EXTENSION     0x00010000      // user mode only
+#define FLG_ENABLE_CSRDEBUG             0x00020000      // kernel mode only at boot time
+#define FLG_ENABLE_KDEBUG_SYMBOL_LOAD   0x00040000      // kernel mode only
+#define FLG_DISABLE_PAGE_KERNEL_STACKS  0x00080000      // kernel mode only at boot time
+
+#define FLG_ENABLE_SYSTEM_CRIT_BREAKS   0x00100000      // user mode only
+#define FLG_HEAP_DISABLE_COALESCING     0x00200000      // user mode only
+#define FLG_ENABLE_CLOSE_EXCEPTIONS     0x00400000      // kernel mode only
+#define FLG_ENABLE_EXCEPTION_LOGGING    0x00800000      // kernel mode only
+
+#define FLG_ENABLE_HANDLE_TYPE_TAGGING  0x01000000      // kernel mode only
+#define FLG_HEAP_PAGE_ALLOCS            0x02000000      // user mode only
+#define FLG_DEBUG_INITIAL_COMMAND_EX    0x04000000      // kernel mode only up until WINLOGON started
+#define FLG_DISABLE_DBGPRINT            0x08000000      // kernel mode only
+
+#define FLG_CRITSEC_EVENT_CREATION      0x10000000      // user mode only, Force early creation of resource events
+#define FLG_LDR_TOP_DOWN                0x20000000      // user mode only, win64 only
+#define FLG_ENABLE_HANDLE_EXCEPTIONS    0x40000000      // kernel mode only
+#define FLG_DISABLE_PROTDLLS            0x80000000      // user mode only (smss/winlogon)
+
+#define FLG_VALID_BITS                  0xFFFFFDFF
+
+#define FLG_USERMODE_VALID_BITS        (FLG_STOP_ON_EXCEPTION           | \
+                                        FLG_SHOW_LDR_SNAPS              | \
+                                        FLG_HEAP_ENABLE_TAIL_CHECK      | \
+                                        FLG_HEAP_ENABLE_FREE_CHECK      | \
+                                        FLG_HEAP_VALIDATE_PARAMETERS    | \
+                                        FLG_HEAP_VALIDATE_ALL           | \
+                                        FLG_APPLICATION_VERIFIER        | \
+                                        FLG_HEAP_ENABLE_TAGGING         | \
+                                        FLG_USER_STACK_TRACE_DB         | \
+                                        FLG_HEAP_ENABLE_TAG_BY_DLL      | \
+                                        FLG_DISABLE_STACK_EXTENSION     | \
+                                        FLG_ENABLE_SYSTEM_CRIT_BREAKS   | \
+                                        FLG_HEAP_DISABLE_COALESCING     | \
+                                        FLG_DISABLE_PROTDLLS            | \
+                                        FLG_HEAP_PAGE_ALLOCS            | \
+                                        FLG_CRITSEC_EVENT_CREATION      | \
+                                        FLG_LDR_TOP_DOWN)
+
+#define FLG_BOOTONLY_VALID_BITS        (FLG_KERNEL_STACK_TRACE_DB       | \
+                                        FLG_MAINTAIN_OBJECT_TYPELIST    | \
+                                        FLG_ENABLE_CSRDEBUG             | \
+                                        FLG_DEBUG_INITIAL_COMMAND       | \
+                                        FLG_DEBUG_INITIAL_COMMAND_EX    | \
+                                        FLG_DISABLE_PAGE_KERNEL_STACKS)
+
+#define FLG_KERNELMODE_VALID_BITS      (FLG_STOP_ON_EXCEPTION           | \
+                                        FLG_SHOW_LDR_SNAPS              | \
+                                        FLG_STOP_ON_HUNG_GUI            | \
+                                        FLG_POOL_ENABLE_TAGGING         | \
+                                        FLG_ENABLE_KDEBUG_SYMBOL_LOAD   | \
+                                        FLG_ENABLE_CLOSE_EXCEPTIONS     | \
+                                        FLG_ENABLE_EXCEPTION_LOGGING    | \
+                                        FLG_ENABLE_HANDLE_TYPE_TAGGING  | \
+                                        FLG_DISABLE_DBGPRINT            | \
+                                        FLG_ENABLE_HANDLE_EXCEPTIONS      \
+                                       )
 
 // For ProcessExecuteFlags
 #define MEM_EXECUTE_OPTION_DISABLE   0x01
@@ -3383,6 +3465,24 @@ typedef struct _RTL_USER_PROCESS_PARAMETERS
     RTL_DRIVE_LETTER_CURDIR CurrentDirectores[0x20];
 
 } RTL_USER_PROCESS_PARAMETERS, *PRTL_USER_PROCESS_PARAMETERS;
+
+//
+// Possible bit values for Flags field.
+//
+
+#define RTL_USER_PROC_PARAMS_NORMALIZED     0x00000001
+#define RTL_USER_PROC_PROFILE_USER          0x00000002
+#define RTL_USER_PROC_PROFILE_KERNEL        0x00000004
+#define RTL_USER_PROC_PROFILE_SERVER        0x00000008
+#define RTL_USER_PROC_RESERVE_1MB           0x00000020
+#define RTL_USER_PROC_RESERVE_16MB          0x00000040
+#define RTL_USER_PROC_CASE_SENSITIVE        0x00000080
+#define RTL_USER_PROC_DISABLE_HEAP_DECOMMIT 0x00000100
+#define RTL_USER_PROC_DLL_REDIRECTION_LOCAL 0x00001000
+#define RTL_USER_PROC_APP_MANIFEST_PRESENT  0x00002000
+#define RTL_USER_PROC_IMAGE_KEY_MISSING     0x00004000
+#define RTL_USER_PROC_OPTIN_PROCESS         0x00020000
+#define RTL_USER_PROC_SECURE_PROCESS        0x80000000
 
 //
 // Process Environment Block
