@@ -3440,9 +3440,21 @@ typedef struct _RTL_USER_PROCESS_PARAMETERS
 
     PVOID ConsoleHandle;                            // HWND to console window associated with process (if any).
     ULONG ConsoleFlags;
-    HANDLE StandardInput;
-    HANDLE StandardOutput;
-    HANDLE StandardError;
+    union
+    {
+        HANDLE StandardInput;
+        HANDLE hStdInput; // wine
+    };
+    union
+    {
+        HANDLE StandardOutput;
+        HANDLE hStdOutput; // wine
+    };
+    union
+    {
+        HANDLE StandardError;
+        HANDLE hStdError; // wine
+    };
 
     CURDIR CurrentDirectory;                        // Specified in DOS-like symbolic link path, ex: "C:/WinNT/SYSTEM32"
     UNICODE_STRING DllPath;                         // DOS-like paths separated by ';' where system should search for DLL files.
@@ -3867,7 +3879,11 @@ typedef struct _TEB
     CLIENT_ID ClientId;
     PVOID ActiveRpcHandle;
     PVOID ThreadLocalStoragePointer;
-    PPEB ProcessEnvironmentBlock;
+    union
+    {
+        PPEB ProcessEnvironmentBlock;
+        PPEB Peb; // wine
+    };
     ULONG LastErrorValue;
     ULONG CountOfOwnedCriticalSections;
     PVOID CsrClientThread;
