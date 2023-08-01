@@ -305,6 +305,8 @@ Sub ModifyAllProps()
     If DirExists(Path) Then
         Call ModifyProps(Path + "Microsoft.Cpp.Win32.user.props", "{app}\include", vbNullString, vbNullString)
         Call ModifyProps(Path + "Microsoft.Cpp.x64.user.props", "{app}\include", vbNullString, vbNullString)
+        Call ModifyProps(Path + "Microsoft.Cpp.ARM.user.props", "{app}\include", vbNullString, vbNullString)
+        Call ModifyProps(Path + "Microsoft.Cpp.ARM64.user.props", "{app}\include", vbNullString, vbNullString)
     End If
 End Sub
 
