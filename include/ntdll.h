@@ -34,8 +34,10 @@ extern "C" {
 
 //------------------------------------------------------------------------------
 // Defines for NTSTATUS
-
-typedef long NTSTATUS;
+#ifndef __success
+#define __success(expr)
+#endif
+typedef __success(return >= 0) LONG NTSTATUS;
 
 #ifndef NT_SUCCESS
 #define NT_SUCCESS(Status) ((NTSTATUS)(Status) >= 0)
