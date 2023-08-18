@@ -27,7 +27,7 @@ extern "C" {
 #endif
 
 #ifndef _NTDLL_SELF_                            // Auto-insert the library
-#pragma comment(lib, "Ntdll.lib")
+//#pragma comment(lib, "Ntdll.lib")
 #endif
 
 #pragma warning(disable: 4201)                  // nonstandard extension used : nameless struct/union
@@ -115,7 +115,7 @@ typedef struct _UNICODE_STRING
 {
     USHORT Length;
     USHORT MaximumLength;
-    PWSTR  Buffer;
+    PWCH  Buffer;
 } UNICODE_STRING, *PUNICODE_STRING;
 
 //
@@ -165,9 +165,78 @@ typedef const UNICODE_STRING *PCUNICODE_STRING;
 
 #define UNICODE_NULL ((WCHAR)0) // winnt
 
-#ifndef RTL_CONSTANT_STRING         // UNICODE_STRING FooStr = RTL_CONSTANT_STRING(L"Foo");
-#define RTL_CONSTANT_STRING(str)    {(USHORT)(sizeof(str) - sizeof(str[0])), (USHORT)(sizeof(str)), str}
-#endif  // RTL_CONSTANT_STRING
+typedef STRING UTF8_STRING;
+typedef PSTRING PUTF8_STRING;
+
+typedef const STRING* PCSTRING;
+typedef const ANSI_STRING* PCANSI_STRING;
+typedef const OEM_STRING* PCOEM_STRING;
+
+#define RTL_CONSTANT_STRING(s) { sizeof(s) - sizeof((s)[0]), sizeof(s), s }
+
+#define DECLARE_CONST_UNICODE_STRING(_var, _str) \
+const WCHAR _var ## _buffer[] = _str; \
+const UNICODE_STRING _var = { sizeof(_str) - sizeof(WCHAR), sizeof(_str), (PWCH) _var ## _buffer }
+
+#define DECLARE_GLOBAL_CONST_UNICODE_STRING(_var, _str) \
+extern const DECLSPEC_SELECTANY UNICODE_STRING _var = RTL_CONSTANT_STRING(_str)
+
+#define DECLARE_UNICODE_STRING_SIZE(_var, _size) \
+WCHAR _var ## _buffer[_size]; \
+UNICODE_STRING _var = { 0, (_size) * sizeof(WCHAR) , _var ## _buffer }
+
+// Balanced tree node
+
+#define RTL_BALANCED_NODE_RESERVED_PARENT_MASK 3
+
+typedef struct _RTL_BALANCED_NODE
+{
+	union
+	{
+		struct _RTL_BALANCED_NODE* Children[2];
+		struct
+		{
+			struct _RTL_BALANCED_NODE* Left;
+			struct _RTL_BALANCED_NODE* Right;
+		};
+	};
+	union
+	{
+		UCHAR Red : 1;
+		UCHAR Balance : 2;
+		ULONG_PTR ParentValue;
+	};
+} RTL_BALANCED_NODE, * PRTL_BALANCED_NODE;
+
+#define RTL_BALANCED_NODE_GET_PARENT_POINTER(Node) \
+    ((PRTL_BALANCED_NODE)((Node)->ParentValue & ~RTL_BALANCED_NODE_RESERVED_PARENT_MASK))
+
+// Portability
+
+typedef struct _SINGLE_LIST_ENTRY32
+{
+	ULONG Next;
+} SINGLE_LIST_ENTRY32, * PSINGLE_LIST_ENTRY32;
+
+typedef struct _STRING32
+{
+	USHORT Length;
+	USHORT MaximumLength;
+	ULONG Buffer;
+} STRING32, * PSTRING32;
+
+typedef STRING32 UNICODE_STRING32, * PUNICODE_STRING32;
+typedef STRING32 ANSI_STRING32, * PANSI_STRING32;
+
+typedef struct _STRING64
+{
+	USHORT Length;
+	USHORT MaximumLength;
+	ULONGLONG Buffer;
+} STRING64, * PSTRING64;
+
+typedef STRING64 UNICODE_STRING64, * PUNICODE_STRING64;
+typedef STRING64 ANSI_STRING64, * PANSI_STRING64;
 
 //
 // Definitions for Object Creation
@@ -238,6 +307,14 @@ typedef struct _IMAGE_RELOC
 
 //------------------------------------------------------------------------------
 // Macros
+
+// INIT_UNICODE_STRING is a replacement of RtlInitUnicodeString
+#ifndef INIT_UNICODE_STRING
+#define INIT_UNICODE_STRING(us, wch)                 \
+    us.MaximumLength = (USHORT)sizeof(wch);          \
+    us.Length        = (USHORT)(wcslen(wch) * sizeof(WCHAR)); \
+    us.Buffer        = wch
+#endif
 
 #ifndef InitializeObjectAttributes
 #define InitializeObjectAttributes( p, n, a, r, s ) {   \
@@ -4318,7 +4395,19 @@ RtlNtPathNameToDosPathName(                     // Available in Windows XP or ne
 //-----------------------------------------------------------------------------
 // Process functions
 
-#define GDI_HANDLE_BUFFER_SIZE      60
+#define GDI_HANDLE_BUFFER_SIZE32 34
+#define GDI_HANDLE_BUFFER_SIZE64 60
+
+#ifndef WIN64
+#define GDI_HANDLE_BUFFER_SIZE GDI_HANDLE_BUFFER_SIZE32
+#else
+#define GDI_HANDLE_BUFFER_SIZE GDI_HANDLE_BUFFER_SIZE64
+#endif
+
+typedef ULONG GDI_HANDLE_BUFFER[GDI_HANDLE_BUFFER_SIZE];
+
+typedef ULONG GDI_HANDLE_BUFFER32[GDI_HANDLE_BUFFER_SIZE32];
+typedef ULONG GDI_HANDLE_BUFFER64[GDI_HANDLE_BUFFER_SIZE64];
 
 // RTL_USER_PROCESS_PARAMETERS::Flags
 #define RTL_USER_PROC_PARAMS_NORMALIZED         0x00000001
@@ -4346,6 +4435,8 @@ RtlNtPathNameToDosPathName(                     // Available in Windows XP or ne
 #define FLG_HEAP_VALIDATE_PARAMETERS            0x00000040          // (hpc) Enable heap parameter checking
 #define FLG_HEAP_VALIDATE_ALL                   0x00000080          // (hvc) Enable heap validation on call
 #define FLG_POOL_ENABLE_TAIL_CHECK              0x00000100          // (vrf) Enable application verifier
+//https://www.geoffchappell.com/studies/windows/win32/ntdll/api/rtl/regutil/getntglobalflags.htm
+#define FLG_APPLICATION_VERIFIER                0x00000100
 #define FLG_MONITOR_SILENT_PROCESS_EXIT         0x00000200          // (   ) Enable silent process exit monitoring
 #define FLG_POOL_ENABLE_TAGGING                 0x00000400          // (ptg) Enable pool tagging (Windows 2000 and Windows XP only)
 #define FLG_HEAP_ENABLE_TAGGING                 0x00000800          // (htg) Enable heap tagging
@@ -4523,9 +4614,21 @@ typedef struct _RTL_USER_PROCESS_PARAMETERS
 
     PVOID ConsoleHandle;                            // HWND to console window associated with process (if any).
     ULONG ConsoleFlags;
-    HANDLE StandardInput;
-    HANDLE StandardOutput;
-    HANDLE StandardError;
+	union
+	{
+		HANDLE StandardInput;
+		HANDLE hStdInput; // wine
+	};
+	union
+	{
+		HANDLE StandardOutput;
+		HANDLE hStdOutput; // wine
+	};
+	union
+	{
+		HANDLE StandardError;
+		HANDLE hStdError; // wine
+	};
 
     CURDIR CurrentDirectory;                        // Specified in DOS-like symbolic link path, ex: "C:/WinNT/SYSTEM32"
     UNICODE_STRING DllPath;                         // DOS-like paths separated by ';' where system should search for DLL files.
@@ -4581,193 +4684,487 @@ typedef struct _PEB_LDR_DATA
 
 } PEB_LDR_DATA, *PPEB_LDR_DATA;
 
-#define LDRP_PACKED_BINARY              0x00000001
-#define LDRP_STATIC_LINK                0x00000002
-#define LDRP_IMAGE_DLL                  0x00000004
-#define LDRP_LOAD_NOTIFICATION_SENT     0x00000008
-#define LDRP_TELEMETRY_ENTRY_PROCESSED  0x00000010
-#define LDRP_PROCESS_STATIC_IMPORT      0x00000020
-#define LDRP_IN_LEGACY_LISTS            0x00000040
-#define LDRP_IN_INDEXES                 0x00000080
-#define LDRP_SHIM_DLL                   0x00000100
-#define LDRP_IN_EXCEPTION_TABLE         0x00000200
-#define LDRP_LOAD_IN_PROGRESS           0x00001000
-#define LDRP_LOAD_CONFIG_PROCESSED      0x00002000    // Was: LDRP_UNLOAD_IN_PROGRESS
-#define LDRP_ENTRY_PROCESSED            0x00004000
-#define LDRP_ENTRY_PROTECT_DELAY_LOAD   0x00008000    // Was: LDRP_ENTRY_INSERTED
-#define LDRP_CURRENT_LOAD               0x00010000
-#define LDRP_FAILED_BUILTIN_LOAD        0x00020000
-#define LDRP_DONT_CALL_FOR_THREADS      0x00040000
-#define LDRP_PROCESS_ATTACH_CALLED      0x00080000
-#define LDRP_DEBUG_SYMBOLS_LOADED       0x00100000
-#define LDRP_IMAGE_NOT_AT_BASE          0x00200000
-#define LDRP_COR_IMAGE                  0x00400000
-#define LDRP_COR_OWNS_UNMAP             0x00800000
-#define LDRP_SYSTEM_MAPPED              0x01000000
-#define LDRP_IMAGE_VERIFYING            0x02000000
-#define LDRP_DRIVER_DEPENDENT_DLL       0x04000000
-#define LDRP_ENTRY_NATIVE               0x08000000
-#define LDRP_REDIRECTED                 0x10000000
-#define LDRP_NON_PAGED_DEBUG_INFO       0x20000000
-#define LDRP_MM_LOADED                  0x40000000
-#define LDRP_COMPAT_DATABASE_PROCESSED  0x80000000
+//https://github.com/winsiderss/systeminformer/blob/master/phnt/include/ntldr.h
+// DLLs
 
+typedef BOOLEAN(NTAPI* PLDR_INIT_ROUTINE)(
+	_In_ PVOID DllHandle,
+	_In_ ULONG Reason,
+	_In_opt_ PVOID Context
+	);
+
+// symbols
+typedef struct _LDR_SERVICE_TAG_RECORD
+{
+	struct _LDR_SERVICE_TAG_RECORD* Next;
+	ULONG ServiceTag;
+} LDR_SERVICE_TAG_RECORD, * PLDR_SERVICE_TAG_RECORD;
+
+// symbols
+typedef struct _LDRP_CSLIST
+{
+	PSINGLE_LIST_ENTRY Tail;
+} LDRP_CSLIST, * PLDRP_CSLIST;
+
+// symbols
+typedef enum _LDR_DDAG_STATE
+{
+	LdrModulesMerged = -5,
+	LdrModulesInitError = -4,
+	LdrModulesSnapError = -3,
+	LdrModulesUnloaded = -2,
+	LdrModulesUnloading = -1,
+	LdrModulesPlaceHolder = 0,
+	LdrModulesMapping = 1,
+	LdrModulesMapped = 2,
+	LdrModulesWaitingForDependencies = 3,
+	LdrModulesSnapping = 4,
+	LdrModulesSnapped = 5,
+	LdrModulesCondensed = 6,
+	LdrModulesReadyToInit = 7,
+	LdrModulesInitializing = 8,
+	LdrModulesReadyToRun = 9
+} LDR_DDAG_STATE;
+
+// symbols
+typedef struct _LDR_DDAG_NODE
+{
+	LIST_ENTRY Modules;
+	PLDR_SERVICE_TAG_RECORD ServiceTagList;
+	ULONG LoadCount;
+	ULONG LoadWhileUnloadingCount;
+	ULONG LowestLink;
+	union
+	{
+		LDRP_CSLIST Dependencies;
+		SINGLE_LIST_ENTRY RemovalLink;
+	};
+	LDRP_CSLIST IncomingDependencies;
+	LDR_DDAG_STATE State;
+	SINGLE_LIST_ENTRY CondenseLink;
+	ULONG PreorderNumber;
+} LDR_DDAG_NODE, * PLDR_DDAG_NODE;
+
+// rev
+typedef struct _LDR_DEPENDENCY_RECORD
+{
+	SINGLE_LIST_ENTRY DependencyLink;
+	PLDR_DDAG_NODE DependencyNode;
+	SINGLE_LIST_ENTRY IncomingDependencyLink;
+	PLDR_DDAG_NODE IncomingDependencyNode;
+} LDR_DEPENDENCY_RECORD, * PLDR_DEPENDENCY_RECORD;
+
+// symbols
+typedef enum _LDR_DLL_LOAD_REASON
+{
+	LoadReasonStaticDependency,
+	LoadReasonStaticForwarderDependency,
+	LoadReasonDynamicForwarderDependency,
+	LoadReasonDelayloadDependency,
+	LoadReasonDynamicLoad,
+	LoadReasonAsImageLoad,
+	LoadReasonAsDataLoad,
+	LoadReasonEnclavePrimary, // since REDSTONE3
+	LoadReasonEnclaveDependency,
+	LoadReasonPatchImage, // since WIN11
+	LoadReasonUnknown = -1
+} LDR_DLL_LOAD_REASON, * PLDR_DLL_LOAD_REASON;
+
+typedef enum _LDR_HOT_PATCH_STATE
+{
+	LdrHotPatchBaseImage,
+	LdrHotPatchNotApplied,
+	LdrHotPatchAppliedReverse,
+	LdrHotPatchAppliedForward,
+	LdrHotPatchFailedToPatch,
+	LdrHotPatchStateMax,
+} LDR_HOT_PATCH_STATE, * PLDR_HOT_PATCH_STATE;
+
+typedef struct _ACTIVATION_CONTEXT* PACTIVATION_CONTEXT;
+typedef struct _LDRP_LOAD_CONTEXT* PLDRP_LOAD_CONTEXT;
+
+// LDR_DATA_TABLE_ENTRY->Flags
+#define LDRP_PACKAGED_BINARY 0x00000001
+#define LDRP_MARKED_FOR_REMOVAL 0x00000002
+//https://www.geoffchappell.com/studies/windows/km/ntoskrnl/inc/api/ntldr/ldr_data_table_entry/flags.htm
+#define LDRP_STATIC_LINK 0x00000002
+#define LDRP_IMAGE_DLL 0x00000004
+#define LDRP_LOAD_NOTIFICATIONS_SENT 0x00000008
+#define LDRP_TELEMETRY_ENTRY_PROCESSED 0x00000010
+#define LDRP_PROCESS_STATIC_IMPORT 0x00000020
+#define LDRP_IN_LEGACY_LISTS 0x00000040
+#define LDRP_IN_INDEXES 0x00000080
+#define LDRP_SHIM_DLL 0x00000100
+#define LDRP_IN_EXCEPTION_TABLE 0x00000200
+#define LDRP_LOAD_IN_PROGRESS 0x00001000
+#define LDRP_LOAD_CONFIG_PROCESSED 0x00002000
+#define LDRP_ENTRY_PROCESSED 0x00004000
+#define LDRP_PROTECT_DELAY_LOAD 0x00008000
+#define LDRP_DONT_CALL_FOR_THREADS 0x00040000
+#define LDRP_PROCESS_ATTACH_CALLED 0x00080000
+#define LDRP_PROCESS_ATTACH_FAILED 0x00100000
+#define LDRP_COR_DEFERRED_VALIDATE 0x00200000
+#define LDRP_COR_IMAGE 0x00400000
+#define LDRP_DONT_RELOCATE 0x00800000
+#define LDRP_COR_IL_ONLY 0x01000000
+#define LDRP_CHPE_IMAGE 0x02000000
+#define LDRP_CHPE_EMULATOR_IMAGE 0x04000000
+#define LDRP_REDIRECTED 0x10000000
+#define LDRP_COMPAT_DATABASE_PROCESSED 0x80000000
+
+#define LDR_DATA_TABLE_ENTRY_SIZE_WINXP FIELD_OFFSET(LDR_DATA_TABLE_ENTRY, DdagNode)
+#define LDR_DATA_TABLE_ENTRY_SIZE_WIN7 FIELD_OFFSET(LDR_DATA_TABLE_ENTRY, BaseNameHashValue)
+#define LDR_DATA_TABLE_ENTRY_SIZE_WIN8 FIELD_OFFSET(LDR_DATA_TABLE_ENTRY, ImplicitPathOptions)
+#define LDR_DATA_TABLE_ENTRY_SIZE_WIN10 FIELD_OFFSET(LDR_DATA_TABLE_ENTRY, SigningLevel)
+#define LDR_DATA_TABLE_ENTRY_SIZE_WIN11 sizeof(LDR_DATA_TABLE_ENTRY)
+
+// symbols
 typedef struct _LDR_DATA_TABLE_ENTRY
 {
-    LIST_ENTRY InLoadOrderLinks;
-    LIST_ENTRY InMemoryOrderLinks;
-    LIST_ENTRY InInitializationOrderLinks;
-    PVOID DllBase;                             // Base address of the module
-    PVOID EntryPoint;
-    ULONG SizeOfImage;
-    UNICODE_STRING FullDllName;
-    UNICODE_STRING BaseDllName;
-    ULONG  Flags;
-    USHORT LoadCount;
-    USHORT TlsIndex;
-    LIST_ENTRY HashLinks;
-    PVOID SectionPointer;
-    ULONG CheckSum;
-    ULONG TimeDateStamp;
-    PVOID LoadedImports;
-    PVOID EntryPointActivationContext;
-    PVOID PatchInformation;
-    LIST_ENTRY ForwarderLinks;
-    LIST_ENTRY ServiceTagLinks;
-    LIST_ENTRY StaticLinks;
-    PVOID ContextInformation;
-    PVOID OriginalBase;
-    LARGE_INTEGER LoadTime;
+	LIST_ENTRY InLoadOrderLinks;
+	LIST_ENTRY InMemoryOrderLinks;
+	union
+	{
+		LIST_ENTRY InInitializationOrderLinks;
+		LIST_ENTRY InProgressLinks;
+	};
+	PVOID DllBase;
+	PLDR_INIT_ROUTINE EntryPoint;
+	ULONG SizeOfImage;
+	UNICODE_STRING FullDllName;
+	UNICODE_STRING BaseDllName;
+	union
+	{
+		UCHAR FlagGroup[4];
+		ULONG Flags;
+		struct
+		{
+			ULONG PackagedBinary : 1;
+			ULONG MarkedForRemoval : 1;
+			ULONG ImageDll : 1;
+			ULONG LoadNotificationsSent : 1;
+			ULONG TelemetryEntryProcessed : 1;
+			ULONG ProcessStaticImport : 1;
+			ULONG InLegacyLists : 1;
+			ULONG InIndexes : 1;
+			ULONG ShimDll : 1;
+			ULONG InExceptionTable : 1;
+			ULONG ReservedFlags1 : 2;
+			ULONG LoadInProgress : 1;
+			ULONG LoadConfigProcessed : 1;
+			ULONG EntryProcessed : 1;
+			ULONG ProtectDelayLoad : 1;
+			ULONG ReservedFlags3 : 2;
+			ULONG DontCallForThreads : 1;
+			ULONG ProcessAttachCalled : 1;
+			ULONG ProcessAttachFailed : 1;
+			ULONG CorDeferredValidate : 1;
+			ULONG CorImage : 1;
+			ULONG DontRelocate : 1;
+			ULONG CorILOnly : 1;
+			ULONG ChpeImage : 1;
+			ULONG ChpeEmulatorImage : 1;
+			ULONG ReservedFlags5 : 1;
+			ULONG Redirected : 1;
+			ULONG ReservedFlags6 : 2;
+			ULONG CompatDatabaseProcessed : 1;
+		};
+	};
+	union
+	{
+		USHORT LoadCount;
+		USHORT ObsoleteLoadCount;//since Win8
+	};
+	USHORT TlsIndex;
+	LIST_ENTRY HashLinks;
+	ULONG TimeDateStamp;
+	PACTIVATION_CONTEXT EntryPointActivationContext;
+	PVOID Lock; // RtlAcquireSRWLockExclusive
+	PLDR_DDAG_NODE DdagNode;
+	LIST_ENTRY NodeModuleLink;
+	PLDRP_LOAD_CONTEXT LoadContext;
+	PVOID ParentDllBase;
+	PVOID SwitchBackContext;
+	RTL_BALANCED_NODE BaseAddressIndexNode;
+	RTL_BALANCED_NODE MappingInfoIndexNode;
+	ULONG_PTR OriginalBase;
+	LARGE_INTEGER LoadTime;
+	ULONG BaseNameHashValue;
+	LDR_DLL_LOAD_REASON LoadReason; // since WIN8
+	ULONG ImplicitPathOptions;
+	ULONG ReferenceCount; // since WIN10
+	ULONG DependentLoadFlags;
+	UCHAR SigningLevel; // since REDSTONE2
+	ULONG CheckSum; // since 22H1
+	PVOID ActivePatchImageBase;
+	LDR_HOT_PATCH_STATE HotPatchState;
+} LDR_DATA_TABLE_ENTRY, * PLDR_DATA_TABLE_ENTRY;
 
-} LDR_DATA_TABLE_ENTRY, *PLDR_DATA_TABLE_ENTRY;
+#define LDR_IS_DATAFILE(DllHandle) (((ULONG_PTR)(DllHandle)) & (ULONG_PTR)1)
+#define LDR_IS_IMAGEMAPPING(DllHandle) (((ULONG_PTR)(DllHandle)) & (ULONG_PTR)2)
+#define LDR_IS_RESOURCE(DllHandle) (LDR_IS_IMAGEMAPPING(DllHandle) || LDR_IS_DATAFILE(DllHandle))
+#define LDR_MAPPEDVIEW_TO_DATAFILE(BaseAddress) ((PVOID)(((ULONG_PTR)(BaseAddress)) | (ULONG_PTR)1))
+#define LDR_MAPPEDVIEW_TO_IMAGEMAPPING(BaseAddress) ((PVOID)(((ULONG_PTR)(BaseAddress)) | (ULONG_PTR)2))
+#define LDR_DATAFILE_TO_MAPPEDVIEW(DllHandle) ((PVOID)(((ULONG_PTR)(DllHandle)) & ~(ULONG_PTR)1))
+#define LDR_IMAGEMAPPING_TO_MAPPEDVIEW(DllHandle) ((PVOID)(((ULONG_PTR)(DllHandle)) & ~(ULONG_PTR)2))
 
-#ifdef _MSC_VER
-#pragma warning(disable: 4214)      // warning C4214: nonstandard extension used : bit field types other than int
-#endif
+typedef struct _RTL_USER_PROCESS_PARAMETERS* PRTL_USER_PROCESS_PARAMETERS;
+typedef struct _RTL_CRITICAL_SECTION* PRTL_CRITICAL_SECTION;
+typedef struct _SILO_USER_SHARED_DATA* PSILO_USER_SHARED_DATA;
+typedef struct _LEAP_SECOND_DATA* PLEAP_SECOND_DATA;
 
+//#include <ntsxs.h>
+#include "pshpack4.h"
+
+typedef struct _ACTIVATION_CONTEXT_DATA
+{
+	ULONG Magic;
+	ULONG HeaderSize;
+	ULONG FormatVersion;
+	ULONG TotalSize;
+	ULONG DefaultTocOffset; // to ACTIVATION_CONTEXT_DATA_TOC_HEADER
+	ULONG ExtendedTocOffset; // to ACTIVATION_CONTEXT_DATA_EXTENDED_TOC_HEADER
+	ULONG AssemblyRosterOffset; // to ACTIVATION_CONTEXT_DATA_ASSEMBLY_ROSTER_HEADER
+	ULONG Flags; // ACTIVATION_CONTEXT_FLAG_*
+} ACTIVATION_CONTEXT_DATA, * PACTIVATION_CONTEXT_DATA;
+
+#include "poppack.h"
+
+// begin_private
+
+typedef struct _ASSEMBLY_STORAGE_MAP_ENTRY
+{
+	ULONG Flags;
+	UNICODE_STRING DosPath;
+	HANDLE Handle;
+} ASSEMBLY_STORAGE_MAP_ENTRY, * PASSEMBLY_STORAGE_MAP_ENTRY;
+
+#define ASSEMBLY_STORAGE_MAP_ASSEMBLY_ARRAY_IS_HEAP_ALLOCATED 0x00000001
+
+typedef struct _ASSEMBLY_STORAGE_MAP
+{
+	ULONG Flags;
+	ULONG AssemblyCount;
+	PASSEMBLY_STORAGE_MAP_ENTRY* AssemblyArray;
+} ASSEMBLY_STORAGE_MAP, * PASSEMBLY_STORAGE_MAP;
+
+// end_private
+
+// private
+typedef struct _API_SET_NAMESPACE
+{
+	ULONG Version;
+	ULONG Size;
+	ULONG Flags;
+	ULONG Count;
+	ULONG EntryOffset;
+	ULONG HashOffset;
+	ULONG HashFactor;
+} API_SET_NAMESPACE, * PAPI_SET_NAMESPACE;
+
+// private
+typedef struct _API_SET_HASH_ENTRY
+{
+	ULONG Hash;
+	ULONG Index;
+} API_SET_HASH_ENTRY, * PAPI_SET_HASH_ENTRY;
+
+// private
+typedef struct _API_SET_NAMESPACE_ENTRY
+{
+	ULONG Flags;
+	ULONG NameOffset;
+	ULONG NameLength;
+	ULONG HashedLength;
+	ULONG ValueOffset;
+	ULONG ValueCount;
+} API_SET_NAMESPACE_ENTRY, * PAPI_SET_NAMESPACE_ENTRY;
+
+// private
+typedef struct _API_SET_VALUE_ENTRY
+{
+	ULONG Flags;
+	ULONG NameOffset;
+	ULONG NameLength;
+	ULONG ValueOffset;
+	ULONG ValueLength;
+} API_SET_VALUE_ENTRY, * PAPI_SET_VALUE_ENTRY;
+
+// symbols
 typedef struct _PEB
 {
-    BOOLEAN InheritedAddressSpace;
-    BOOLEAN ReadImageFileExecOptions;
-    BOOLEAN BeingDebugged;
-    union
-    {
-        UCHAR BitField;
-        struct
-        {
-            UCHAR ImageUsesLargePages:1;
-            UCHAR IsProtectedProcess:1;
-            UCHAR IsImageDynamicallyRelocated:1;
-            UCHAR SkipPatchingUser32Forwarders:1;
-            UCHAR IsPackagedProcess:1;
-            UCHAR IsAppContainer:1;
-            UCHAR IsProtectedProcessLight:1;
-            UCHAR SpareBits:1;
-        };
-    };
+	BOOLEAN InheritedAddressSpace;
+	BOOLEAN ReadImageFileExecOptions;
+	BOOLEAN BeingDebugged;
+	union
+	{
+		BOOLEAN BitField;
+		struct
+		{
+			BOOLEAN ImageUsesLargePages : 1;
+			BOOLEAN IsProtectedProcess : 1;
+			BOOLEAN IsImageDynamicallyRelocated : 1;
+			BOOLEAN SkipPatchingUser32Forwarders : 1;
+			BOOLEAN IsPackagedProcess : 1;
+			BOOLEAN IsAppContainer : 1;
+			BOOLEAN IsProtectedProcessLight : 1;
+			BOOLEAN IsLongPathAwareProcess : 1;
+		};
+	};
 
-    HANDLE Mutant;
-    PVOID ImageBaseAddress;
-    PPEB_LDR_DATA Ldr;
-    PRTL_USER_PROCESS_PARAMETERS ProcessParameters;
-    PVOID SubSystemData;
-    PVOID ProcessHeap;
+	HANDLE Mutant;
 
-    //--- Windows 7. Can be different in different Windows version. ---------------
+	PVOID ImageBaseAddress;
+	PPEB_LDR_DATA Ldr;
+	PRTL_USER_PROCESS_PARAMETERS ProcessParameters;
+	PVOID SubSystemData;
+	PVOID ProcessHeap;
+	PRTL_CRITICAL_SECTION FastPebLock;
+	PSLIST_HEADER AtlThunkSListPtr;
+	PVOID IFEOKey;
 
-    PRTL_CRITICAL_SECTION FastPebLock;
-    PVOID AtlThunkSListPtr;
-    PVOID IFEOKey;
+	union
+	{
+		ULONG CrossProcessFlags;
+		struct
+		{
+			ULONG ProcessInJob : 1;
+			ULONG ProcessInitializing : 1;
+			ULONG ProcessUsingVEH : 1;
+			ULONG ProcessUsingVCH : 1;
+			ULONG ProcessUsingFTH : 1;
+			ULONG ProcessPreviouslyThrottled : 1;
+			ULONG ProcessCurrentlyThrottled : 1;
+			ULONG ProcessImagesHotPatched : 1; // REDSTONE5
+			ULONG ReservedBits0 : 24;
+		};
+	};
+	union
+	{
+		PVOID KernelCallbackTable;
+		PVOID UserSharedInfoPtr;
+	};
+	ULONG SystemReserved;
+	ULONG AtlThunkSListPtr32;
+	PAPI_SET_NAMESPACE ApiSetMap;
+	ULONG TlsExpansionCounter;
+	PVOID TlsBitmap;
+	ULONG TlsBitmapBits[2];
 
-    union
-    {
-        ULONG CrossProcessFlags;
-        struct
-        {
-            ULONG ProcessInJob : 1;
-            ULONG ProcessInitializing : 1;
-            ULONG ProcessUsingVEH : 1;
-            ULONG ProcessUsingVCH : 1;
-            ULONG ProcessUsingFTH : 1;
-            ULONG ReservedBits0 : 25;
-        };
-    };
+	PVOID ReadOnlySharedMemoryBase;
+	PSILO_USER_SHARED_DATA SharedData; // HotpatchInformation
+	PVOID* ReadOnlyStaticServerData;
 
-    union
-    {
-    PVOID KernelCallbackTable;
-    PVOID UserSharedInfoPtr;
-    };
+	PVOID AnsiCodePageData; // PCPTABLEINFO
+	PVOID OemCodePageData; // PCPTABLEINFO
+	PVOID UnicodeCaseTableData; // PNLSTABLEINFO
 
-    ULONG SystemReserved[1];
-    PVOID AtlThunkSListPtr32;
-    PVOID ApiSetMap;
-    ULONG TlsExpansionCounter;
-    PVOID TlsBitmap;
-    ULONG TlsBitmapBits[2];                         // relates to TLS_MINIMUM_AVAILABLE
-    PVOID ReadOnlySharedMemoryBase;
-    PVOID HotpatchInformation;
-    PVOID *ReadOnlyStaticServerData;
-    PVOID AnsiCodePageData;
-    PVOID OemCodePageData;
-    PVOID UnicodeCaseTableData;
+	ULONG NumberOfProcessors;
+	ULONG NtGlobalFlag;
 
-    //
-    // Useful information for LdrpInitialize
+	ULARGE_INTEGER CriticalSectionTimeout;
+	SIZE_T HeapSegmentReserve;
+	SIZE_T HeapSegmentCommit;
+	SIZE_T HeapDeCommitTotalFreeThreshold;
+	SIZE_T HeapDeCommitFreeBlockThreshold;
 
-    ULONG NumberOfProcessors;
-    ULONG NtGlobalFlag;
+	ULONG NumberOfHeaps;
+	ULONG MaximumNumberOfHeaps;
+	PVOID* ProcessHeaps; // PHEAP
 
-    //
-    // Passed up from MmCreatePeb from Session Manager registry key
-    //
+	PVOID GdiSharedHandleTable; // PGDI_SHARED_MEMORY
+	PVOID ProcessStarterHelper;
+	ULONG GdiDCAttributeList;
 
-    LARGE_INTEGER CriticalSectionTimeout;
-    ULONG HeapSegmentReserve;
-    ULONG HeapSegmentCommit;
-    ULONG HeapDeCommitTotalFreeThreshold;
-    ULONG HeapDeCommitFreeBlockThreshold;
+	PRTL_CRITICAL_SECTION LoaderLock;
 
-    //
-    // Where heap manager keeps track of all heaps created for a process
-    // Fields initialized by MmCreatePeb.  ProcessHeaps is initialized
-    // to point to the first free byte after the PEB and MaximumNumberOfHeaps
-    // is computed from the page size used to hold the PEB, less the fixed
-    // size of this data structure.
-    //
+	ULONG OSMajorVersion;
+	ULONG OSMinorVersion;
+	USHORT OSBuildNumber;
+	USHORT OSCSDVersion;
+	ULONG OSPlatformId;
+	ULONG ImageSubsystem;
+	ULONG ImageSubsystemMajorVersion;
+	ULONG ImageSubsystemMinorVersion;
+	KAFFINITY ActiveProcessAffinityMask;
+	GDI_HANDLE_BUFFER GdiHandleBuffer;
+	PVOID PostProcessInitRoutine;
 
-    ULONG NumberOfHeaps;
-    ULONG MaximumNumberOfHeaps;
-    PVOID *ProcessHeaps;
+	PVOID TlsExpansionBitmap;
+	ULONG TlsExpansionBitmapBits[32];
 
-    //
-    //
-    PVOID GdiSharedHandleTable;
-    PVOID ProcessStarterHelper;
-    PVOID GdiDCAttributeList;
-    PRTL_CRITICAL_SECTION LoaderLock;
+	ULONG SessionId;
 
-    //
-    // Following fields filled in by MmCreatePeb from system values and/or
-    // image header. These fields have changed since Windows NT 4.0,
-    // so use with caution
-    //
+	ULARGE_INTEGER AppCompatFlags;
+	ULARGE_INTEGER AppCompatFlagsUser;
+	PVOID pShimData;
+	PVOID AppCompatInfo; // APPCOMPAT_EXE_DATA
 
-    ULONG OSMajorVersion;
-    ULONG OSMinorVersion;
-    USHORT OSBuildNumber;
-    USHORT OSCSDVersion;
-    ULONG OSPlatformId;
-    ULONG ImageSubsystem;
-    ULONG ImageSubsystemMajorVersion;
-    ULONG ImageSubsystemMinorVersion;
-    ULONG ImageProcessAffinityMask;
-    ULONG GdiHandleBuffer[GDI_HANDLE_BUFFER_SIZE];
-    PVOID PostProcessInitRoutine;
+	UNICODE_STRING CSDVersion;
 
-    // More here. Do not use.
+	PACTIVATION_CONTEXT_DATA ActivationContextData;
+	PASSEMBLY_STORAGE_MAP ProcessAssemblyStorageMap;
+	PACTIVATION_CONTEXT_DATA SystemDefaultActivationContextData;
+	PASSEMBLY_STORAGE_MAP SystemAssemblyStorageMap;
 
-} PEB, *PPEB;
+	SIZE_T MinimumStackCommit;
+
+	PVOID SparePointers[2]; // 19H1 (previously FlsCallback to FlsHighIndex)
+	PVOID PatchLoaderData;
+	PVOID ChpeV2ProcessInfo; // _CHPEV2_PROCESS_INFO
+
+	ULONG AppModelFeatureState;
+	ULONG SpareUlongs[2];
+
+	USHORT ActiveCodePage;
+	USHORT OemCodePage;
+	USHORT UseCaseMapping;
+	USHORT UnusedNlsField;
+
+	PVOID WerRegistrationData;
+	PVOID WerShipAssertPtr;
+
+	union
+	{
+		PVOID pContextData; // WIN7
+		PVOID pUnused; // WIN10
+		PVOID EcCodeBitMap; // WIN11
+	};
+
+	PVOID pImageHeaderHash;
+	union
+	{
+		ULONG TracingFlags;
+		struct
+		{
+			ULONG HeapTracingEnabled : 1;
+			ULONG CritSecTracingEnabled : 1;
+			ULONG LibLoaderTracingEnabled : 1;
+			ULONG SpareTracingBits : 29;
+		};
+	};
+	ULONGLONG CsrServerReadOnlySharedMemoryBase;
+	PRTL_CRITICAL_SECTION TppWorkerpListLock;
+	LIST_ENTRY TppWorkerpList;
+	PVOID WaitOnAddressHashTable[128];
+	PVOID TelemetryCoverageHeader; // REDSTONE3
+	ULONG CloudFileFlags;
+	ULONG CloudFileDiagFlags; // REDSTONE4
+	CHAR PlaceholderCompatibilityMode;
+	CHAR PlaceholderCompatibilityModeReserved[7];
+	PLEAP_SECOND_DATA LeapSecondData; // REDSTONE5
+	union
+	{
+		ULONG LeapSecondFlags;
+		struct
+		{
+			ULONG SixtySecondEnabled : 1;
+			ULONG Reserved : 31;
+		};
+	};
+	ULONG NtGlobalFlag2;
+	ULONGLONG ExtendedFeatureDisableMask; // since WIN11
+} PEB, * PPEB;
 
 
 //
@@ -4781,7 +5178,11 @@ typedef struct _TEB
     CLIENT_ID ClientId;
     PVOID ActiveRpcHandle;
     PVOID ThreadLocalStoragePointer;
-    PPEB ProcessEnvironmentBlock;
+	union
+	{
+		PPEB ProcessEnvironmentBlock;
+		PPEB Peb; // wine
+	};
     ULONG LastErrorValue;
     ULONG CountOfOwnedCriticalSections;
     PVOID CsrClientThread;
@@ -4803,7 +5204,19 @@ typedef struct _PROCESS_BASIC_INFORMATION
 
 } PROCESS_BASIC_INFORMATION,*PPROCESS_BASIC_INFORMATION;
 
-typedef BOOLEAN (*PDLL_INIT_ROUTINE)(
+// Thread information structures
+
+typedef struct _THREAD_BASIC_INFORMATION
+{
+	NTSTATUS ExitStatus;
+	PTEB TebBaseAddress;
+	CLIENT_ID ClientId;
+	KAFFINITY AffinityMask;
+	KPRIORITY Priority;
+	KPRIORITY BasePriority;
+} THREAD_BASIC_INFORMATION, * PTHREAD_BASIC_INFORMATION;
+
+typedef BOOLEAN (NTAPI *PDLL_INIT_ROUTINE)(
     IN PVOID DllHandle,
     IN ULONG Reason,
     IN PCONTEXT Context OPTIONAL
@@ -6115,18 +6528,18 @@ NtMapViewOfSection (
 NTSYSAPI
 NTSTATUS
 NTAPI
-ZwMapViewOfSection (
-    IN     HANDLE SectionHandle,
-    IN     HANDLE ProcessHandle,
-    IN OUT PVOID *BaseAddress,
-    IN     ULONG_PTR ZeroBits,
-    IN     ULONG CommitSize,
+ZwMapViewOfSection(
+    IN HANDLE SectionHandle,
+    IN HANDLE ProcessHandle,
+    IN OUT PVOID* BaseAddress,
+    IN ULONG_PTR ZeroBits,
+    IN SIZE_T CommitSize,
     IN OUT PLARGE_INTEGER SectionOffset OPTIONAL,
-    IN OUT PULONG ViewSize,
-    IN     SECTION_INHERIT InheritDisposition,
-    IN     ULONG AllocationType,
-    IN     ULONG Protect
-    );
+    IN OUT PSIZE_T ViewSize,
+    IN SECTION_INHERIT InheritDisposition,
+    IN ULONG AllocationType,
+    IN ULONG Protect
+);
 
 NTSYSAPI
 NTSTATUS
