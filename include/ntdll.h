@@ -4950,46 +4950,6 @@ typedef struct _ASSEMBLY_STORAGE_MAP
 
 // end_private
 
-// private
-typedef struct _API_SET_NAMESPACE
-{
-	ULONG Version;
-	ULONG Size;
-	ULONG Flags;
-	ULONG Count;
-	ULONG EntryOffset;
-	ULONG HashOffset;
-	ULONG HashFactor;
-} API_SET_NAMESPACE, * PAPI_SET_NAMESPACE;
-
-// private
-typedef struct _API_SET_HASH_ENTRY
-{
-	ULONG Hash;
-	ULONG Index;
-} API_SET_HASH_ENTRY, * PAPI_SET_HASH_ENTRY;
-
-// private
-typedef struct _API_SET_NAMESPACE_ENTRY
-{
-	ULONG Flags;
-	ULONG NameOffset;
-	ULONG NameLength;
-	ULONG HashedLength;
-	ULONG ValueOffset;
-	ULONG ValueCount;
-} API_SET_NAMESPACE_ENTRY, * PAPI_SET_NAMESPACE_ENTRY;
-
-// private
-typedef struct _API_SET_VALUE_ENTRY
-{
-	ULONG Flags;
-	ULONG NameOffset;
-	ULONG NameLength;
-	ULONG ValueOffset;
-	ULONG ValueLength;
-} API_SET_VALUE_ENTRY, * PAPI_SET_VALUE_ENTRY;
-
 // symbols
 typedef struct _PEB
 {
@@ -5046,7 +5006,7 @@ typedef struct _PEB
 	};
 	ULONG SystemReserved;
 	ULONG AtlThunkSListPtr32;
-	PAPI_SET_NAMESPACE ApiSetMap;
+	PVOID ApiSetMap;
 	ULONG TlsExpansionCounter;
 	PVOID TlsBitmap;
 	ULONG TlsBitmapBits[2];
