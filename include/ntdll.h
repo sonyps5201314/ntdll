@@ -4688,9 +4688,9 @@ typedef struct _PEB_LDR_DATA
 // DLLs
 
 typedef BOOLEAN(NTAPI* PLDR_INIT_ROUTINE)(
-	_In_ PVOID DllHandle,
-	_In_ ULONG Reason,
-	_In_opt_ PVOID Context
+	IN PVOID DllHandle,
+	IN ULONG Reason,
+	IN PVOID Context OPTIONAL
 	);
 
 // symbols
@@ -5187,9 +5187,9 @@ typedef VOID (NTAPI *PUSER_THREAD_START_ROUTINE)(
     );
 
 typedef VOID (*PPS_APC_ROUTINE) (
-    __in_opt PVOID ApcArgument1,
-    __in_opt PVOID ApcArgument2,
-    __in_opt PVOID ApcArgument3
+    IN PVOID ApcArgument1 OPTIONAL,
+    IN PVOID ApcArgument2 OPTIONAL,
+    IN PVOID ApcArgument3 OPTIONAL
     );
 
 NTSYSAPI
@@ -6152,6 +6152,7 @@ RtlValidateHeap (
     IN PVOID Address OPTIONAL
     );
 
+/*
 NTSYSAPI
 NTSTATUS
 NTAPI
@@ -6172,6 +6173,7 @@ RtlSetHeapInformation (
     IN PVOID HeapInformation OPTIONAL,
     IN SIZE_T HeapInformationLength OPTIONAL
     );
+*/
 
 //-----------------------------------------------------------------------------
 // Virtual memory functions
