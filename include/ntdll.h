@@ -6396,6 +6396,20 @@ ZwTerminateProcess(
     NTSTATUS ExitStatus
     );
 
+NTSYSAPI
+NTSTATUS
+NTAPI
+NtSuspendProcess(
+    HANDLE ProcessHandle
+    );
+
+NTSYSAPI
+NTSTATUS
+NTAPI
+NtResumeProcess(
+    HANDLE ProcessHandle
+    );
+
 //------------------------------------------------------------------------------
 // Worker factory functions
 
