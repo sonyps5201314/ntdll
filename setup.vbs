@@ -155,7 +155,7 @@ End Sub
 
 Private Sub ModifyProps(FileName, includefolder, dlibfolder, slibfolder)
     Dim XMLDocument 'As DOMDocument
-    Dim XMLParent, IdgNode, XMLNode, XMLNodes
+    Dim XMLParent, IdgNode, ItemDefinitionGroupNode, XMLNode, XMLNodes
     Dim IncludeDirectoriesNode
     Dim AdditionalIncludeDirectories
     Dim DynamicLibraryDirectoriesNode
@@ -201,6 +201,18 @@ Private Sub ModifyProps(FileName, includefolder, dlibfolder, slibfolder)
         Set XMLNode = XMLDocument.createNode(1, "PropertyGroup", "http://schemas.microsoft.com/developer/msbuild/2003")
         Set PropertyGroupNode = IdgNode.appendChild(XMLNode)
       End If
+      Set XMLNodes = IdgNode.selectNodes("b:ItemDefinitionGroup[not(@Condition)]")
+      If (XMLNodes.length > 0) Then
+        Set ItemDefinitionGroupNode = XMLNodes.Item(0)
+      Else
+        Set XMLNodes = IdgNode.selectNodes("b:ItemDefinitionGroup")
+        If (XMLNodes.length > 0) Then
+          Set ItemDefinitionGroupNode = XMLNodes.Item(0)
+        Else
+          Set XMLNode = XMLDocument.createNode(1, "ItemDefinitionGroup", "http://schemas.microsoft.com/developer/msbuild/2003")
+          Set ItemDefinitionGroupNode = IdgNode.appendChild(XMLNode)
+        End If
+      End If
       
       If Len(includefolder) > 0 Then
         Set XMLNodes = PropertyGroupNode.selectNodes("//b:IncludePath")
@@ -219,14 +231,20 @@ Private Sub ModifyProps(FileName, includefolder, dlibfolder, slibfolder)
         Set IncludeDirectoriesNode = XMLParent
       End If
       If Len(dlibfolder) > 0 Then
-        Set XMLNodes = IdgNode.selectNodes("//b:Link")
+        Set XMLNodes = ItemDefinitionGroupNode.selectNodes("b:Link")
         If (XMLNodes.length > 0) Then
           Set XMLParent = XMLNodes.Item(0)
         Else
-          Set XMLNode = XMLDocument.createNode(1, "Link", "http://schemas.microsoft.com/developer/msbuild/2003")
-          Set XMLParent = IdgNode.appendChild(XMLNode)
+          Set XMLNodes = IdgNode.selectNodes("b:Link")
+          If (XMLNodes.length > 0) Then
+            Set XMLParent = XMLNodes.Item(0)
+            ItemDefinitionGroupNode.appendChild(XMLParent)
+          Else
+            Set XMLNode = XMLDocument.createNode(1, "Link", "http://schemas.microsoft.com/developer/msbuild/2003")
+            Set XMLParent = ItemDefinitionGroupNode.appendChild(XMLNode)
+          End If
         End If
-        Set XMLNodes = XMLParent.selectNodes("//b:Link/b:AdditionalLibraryDirectories[not(@Condition)]")
+        Set XMLNodes = XMLParent.selectNodes("b:AdditionalLibraryDirectories[not(@Condition)]")
         If (XMLNodes.length > 0) Then
           Set DynamicLibraryDirectoriesNode = XMLNodes.Item(0)
         Else
@@ -235,14 +253,20 @@ Private Sub ModifyProps(FileName, includefolder, dlibfolder, slibfolder)
         End If
      End If
      If Len(slibfolder) > 0 Then
-        Set XMLNodes = IdgNode.selectNodes("//b:Lib")
+        Set XMLNodes = ItemDefinitionGroupNode.selectNodes("b:Lib")
         If (XMLNodes.length > 0) Then
           Set XMLParent = XMLNodes.Item(0)
         Else
-          Set XMLNode = XMLDocument.createNode(1, "Lib", "http://schemas.microsoft.com/developer/msbuild/2003")
-          Set XMLParent = IdgNode.appendChild(XMLNode)
+          Set XMLNodes = IdgNode.selectNodes("b:Lib")
+          If (XMLNodes.length > 0) Then
+            Set XMLParent = XMLNodes.Item(0)
+            ItemDefinitionGroupNode.appendChild(XMLParent)
+          Else
+            Set XMLNode = XMLDocument.createNode(1, "Lib", "http://schemas.microsoft.com/developer/msbuild/2003")
+            Set XMLParent = ItemDefinitionGroupNode.appendChild(XMLNode)
+          End If
         End If
-        Set XMLNodes = XMLParent.selectNodes("//b:Lib/b:AdditionalLibraryDirectories[not(@Condition)]")
+        Set XMLNodes = XMLParent.selectNodes("b:AdditionalLibraryDirectories[not(@Condition)]")
         If (XMLNodes.length > 0) Then
           Set StaticLibraryDirectoriesNode = XMLNodes.Item(0)
         Else
